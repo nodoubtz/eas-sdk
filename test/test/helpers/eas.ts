@@ -19,10 +19,10 @@ import {
   EIP712Response,
   EIP712RevocationParams,
   EIP712RevocationProxyParams,
+  Offchain,
   OffchainAttestationVersion
 } from '../../../src/offchain';
 import { Transaction } from '../../../src/transaction';
-import { getOffchainUID } from '../../../src/utils';
 import { ZERO_BYTES, ZERO_BYTES32 } from '../../utils/Constants';
 import { latest } from './time';
 
@@ -46,8 +46,7 @@ export interface AttestationOptions extends RequestOptions {
   bump?: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface RevocationOptions extends RequestOptions {}
+export type RevocationOptions = RequestOptions;
 
 export const expectAttestation = async (
   eas: EAS,
@@ -101,7 +100,6 @@ export const expectAttestation = async (
           refUID,
           data,
           value,
-          nonce: await eas.getNonce(await txSender.getAddress()),
           deadline
         },
         txSender
@@ -171,7 +169,7 @@ export const expectAttestation = async (
 
       const now = await latest();
       const salt = encodeBytes32String('SALT');
-      const uid = getOffchainUID(
+      const uid = Offchain.getOffchainUID(
         OffchainAttestationVersion.Version2,
         schema,
         recipient,
@@ -388,10 +386,7 @@ export const expectRevocation = async (
 
     case SignatureType.Delegated: {
       const delegated = await eas.getDelegated();
-      const response = await delegated.signDelegatedRevocation(
-        { schema, uid, value, deadline, nonce: await eas.getNonce(await txSender.getAddress()) },
-        txSender
-      );
+      const response = await delegated.signDelegatedRevocation({ schema, uid, value, deadline }, txSender);
 
       expect(await delegated.verifyDelegatedRevocationSignature(await txSender.getAddress(), response)).to.be.true;
 

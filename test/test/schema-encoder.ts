@@ -115,6 +115,55 @@ describe('SchemaEncoder', () => {
             value: []
           }
         ]
+      },
+      {
+        schema:
+          // eslint-disable-next-line max-len
+          'string contractGroupName,string ipfsHash,string readmeIpfsHash,address[] contractAddresses,string[] contractNames,string[] contractNetworks,string[] contractIpfsHashes',
+        decodedSchema: [
+          {
+            name: 'contractGroupName',
+            type: 'string',
+            signature: 'string contractGroupName',
+            value: ''
+          },
+          {
+            name: 'ipfsHash',
+            type: 'string',
+            signature: 'string ipfsHash',
+            value: ''
+          },
+          {
+            name: 'readmeIpfsHash',
+            type: 'string',
+            signature: 'string readmeIpfsHash',
+            value: ''
+          },
+          {
+            name: 'contractAddresses',
+            type: 'address[]',
+            signature: 'address[] contractAddresses',
+            value: []
+          },
+          {
+            name: 'contractNames',
+            type: 'string[]',
+            signature: 'string[] contractNames',
+            value: []
+          },
+          {
+            name: 'contractNetworks',
+            type: 'string[]',
+            signature: 'string[] contractNetworks',
+            value: []
+          },
+          {
+            name: 'contractIpfsHashes',
+            type: 'string[]',
+            signature: 'string[] contractIpfsHashes',
+            value: []
+          }
+        ]
       }
     ]) {
       context(schema, () => {
@@ -122,18 +171,9 @@ describe('SchemaEncoder', () => {
           const schemaEncoder = new SchemaEncoder(schema);
           expect(schemaEncoder.schema).to.deep.equal(decodedSchema);
         });
-      });
-    }
 
-    for (const schema of [
-      'boo like',
-      'adss contractAddress,bool trusted',
-      'bytes32 eventId,uint8 ticketType,uint10000 ticketNum',
-      'bytes32 eventId,uint8 ticketType,ticketNum'
-    ]) {
-      context(schema, () => {
-        it('should throw', () => {
-          expect(() => new SchemaEncoder(schema)).to.throw(Error);
+        it('should verify', () => {
+          expect(SchemaEncoder.isSchemaValid(schema)).to.be.true;
         });
       });
     }
@@ -474,6 +514,45 @@ describe('SchemaEncoder', () => {
             ]
           }
         ]
+      },
+      {
+        schema: '(uint256 badgeId,uint256 level)[] badges',
+        types: ['(uint256 badgeId,uint256 level)[]'],
+        inputs: [
+          {
+            in: [
+              {
+                type: '(uint256,uint256)[]',
+                name: 'badges',
+                value: [
+                  { badgeId: 1n, level: 10n },
+                  { badgeId: 2n, level: 20n },
+                  { badgeId: 3n, level: 30n }
+                ]
+              }
+            ],
+            out: [
+              {
+                type: '(uint256,uint256)[]',
+                name: 'badges',
+                value: [
+                  [
+                    { name: 'badgeId', type: 'uint256', value: 1n },
+                    { name: 'level', type: 'uint256', value: 10n }
+                  ],
+                  [
+                    { name: 'badgeId', type: 'uint256', value: 2n },
+                    { name: 'level', type: 'uint256', value: 20n }
+                  ],
+                  [
+                    { name: 'badgeId', type: 'uint256', value: 3n },
+                    { name: 'level', type: 'uint256', value: 30n }
+                  ]
+                ]
+              }
+            ]
+          }
+        ]
       }
     ]) {
       for (const params of inputs) {
@@ -636,6 +715,21 @@ describe('SchemaEncoder', () => {
           });
         });
       }
+    }
+  });
+
+  describe('verification', () => {
+    for (const schema of [
+      'boo like',
+      'adss contractAddress,bool trusted',
+      'bytes32 eventId,uint8 ticketType,uint10000 ticketNum',
+      'bytes32 eventId,uint8 ticketType,ticketNum'
+    ]) {
+      context(schema, () => {
+        it('should unable to verify', () => {
+          expect(SchemaEncoder.isSchemaValid(schema)).to.be.false;
+        });
+      });
     }
   });
 

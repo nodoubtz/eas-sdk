@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.7.0
+
+- Move getUID, getSchemaUID, and getOffchainUID to EAS, SchemaRegistry, and Offchain respectively
+
+## 2.6.1
+
+- Fix exports
+
+## 2.6.0
+
+- Support initializing/connecting SDK objects with/to non-signer providers
+
+## 2.5.0
+
+- Add schema verification function
+- Fix handling of schemas with "ipfsHash" variables
+
+## 2.4.1
+
+- Export Private Data types
+
+## 2.4.0
+
+- Delegated Attestations: if nonce isn't provided, try retrieving it onchain
+
+## 2.3.0
+
+- Add utilities to handle private data
+
 ## 2.2.0
 
 - Add a method to receive the tx receipt to the Transaction object

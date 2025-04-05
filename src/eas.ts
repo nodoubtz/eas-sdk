@@ -1,5 +1,12 @@
 import { EAS as EASContract, EAS__factory as EASFactory } from '@ethereum-attestation-service/eas-contracts';
-import { ContractTransaction, Overrides, TransactionReceipt } from 'ethers';
+import {
+  ContractTransaction,
+  hexlify,
+  Overrides,
+  solidityPackedKeccak256,
+  toUtf8Bytes,
+  TransactionReceipt
+} from 'ethers';
 import semver from 'semver';
 import { EIP712Proxy } from './eip712-proxy';
 import { EAS as EASLegacyContract, EAS__factory as EASLegacyFactory } from './legacy/typechain';
@@ -20,7 +27,7 @@ import {
   NO_EXPIRATION,
   RevocationRequest
 } from './request';
-import { Base, Transaction, TransactionSigner } from './transaction';
+import { Base, RequireSigner, Transaction, TransactionProvider, TransactionSigner } from './transaction';
 import {
   getTimestampFromOffchainRevocationReceipt,
   getTimestampFromTimestampReceipt,
@@ -48,9 +55,24 @@ export interface Attestation {
 }
 
 export interface EASOptions {
-  signer?: TransactionSigner;
+  signer?: TransactionSigner | TransactionProvider;
   proxy?: EIP712Proxy;
 }
+
+export const RequireProxy = (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) => {
+  const originalMethod = descriptor.value;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  descriptor.value = function (...args: any[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(this as any).proxy) {
+      throw new Error('Invalid proxy');
+    }
+    return originalMethod.apply(this, args);
+  };
+
+  return descriptor;
+};
 
 export class EAS extends Base<EASContract> {
   private proxy?: EIP712Proxy;
@@ -79,7 +101,7 @@ export class EAS extends Base<EASContract> {
   }
 
   // Connects the API to a specific signer
-  public connect(signer: TransactionSigner) {
+  public connect(signer: TransactionSigner | TransactionProvider) {
     delete this.delegated;
     delete this.offchain;
 
@@ -155,6 +177,7 @@ export class EAS extends Base<EASContract> {
   }
 
   // Attests to a specific schema
+  @RequireSigner
   public async attest(
     {
       schema,
@@ -169,22 +192,19 @@ export class EAS extends Base<EASContract> {
     }: AttestationRequest,
     overrides?: Overrides
   ): Promise<Transaction<string>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.attest.populateTransaction(
         { schema, data: { recipient, expirationTime, revocable, refUID, data, value } },
         { value, ...overrides }
       ),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getUIDsFromAttestReceipt(receipt)[0]
     );
   }
 
   // Attests to a specific schema via an EIP712 delegation request
+  @RequireSigner
   public async attestByDelegation(
     {
       schema,
@@ -202,10 +222,6 @@ export class EAS extends Base<EASContract> {
     }: DelegatedAttestationRequest,
     overrides?: Overrides
   ): Promise<Transaction<string>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     let tx: ContractTransaction;
 
     if (await this.isLegacyContract()) {
@@ -247,18 +263,15 @@ export class EAS extends Base<EASContract> {
 
     return new Transaction(
       tx,
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getUIDsFromAttestReceipt(receipt)[0]
     );
   }
 
   // Multi-attests to multiple schemas
+  @RequireSigner
   public async multiAttest(requests: MultiAttestationRequest[], overrides?: Overrides): Promise<Transaction<string[]>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     const multiAttestationRequests = requests.map((r) => ({
       schema: r.schema,
       data: r.data.map((d) => ({
@@ -281,21 +294,18 @@ export class EAS extends Base<EASContract> {
         value: requestedValue,
         ...overrides
       }),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getUIDsFromAttestReceipt(receipt)
     );
   }
 
   // Multi-attests to multiple schemas via an EIP712 delegation requests
+  @RequireSigner
   public async multiAttestByDelegation(
     requests: MultiDelegatedAttestationRequest[],
     overrides?: Overrides
   ): Promise<Transaction<string[]>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     let tx: ContractTransaction;
 
     if (await this.isLegacyContract()) {
@@ -352,37 +362,31 @@ export class EAS extends Base<EASContract> {
 
     return new Transaction(
       tx,
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getUIDsFromAttestReceipt(receipt)
     );
   }
 
   // Revokes an existing attestation
+  @RequireSigner
   public async revoke(
     { schema, data: { uid, value = 0n } }: RevocationRequest,
     overrides?: Overrides
   ): Promise<Transaction<void>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.revoke.populateTransaction({ schema, data: { uid, value } }, { value, ...overrides }),
-      this.signer,
+      this.signer!,
       async () => {}
     );
   }
 
   // Revokes an existing attestation an EIP712 delegation request
+  @RequireSigner
   public async revokeByDelegation(
     { schema, data: { uid, value = 0n }, signature, revoker, deadline = NO_EXPIRATION }: DelegatedRevocationRequest,
     overrides?: Overrides
   ): Promise<Transaction<void>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     let tx: ContractTransaction;
 
     if (await this.isLegacyContract()) {
@@ -414,15 +418,12 @@ export class EAS extends Base<EASContract> {
       );
     }
 
-    return new Transaction(tx, this.signer, async () => {});
+    return new Transaction(tx, this.signer!, async () => {});
   }
 
   // Multi-revokes multiple attestations
+  @RequireSigner
   public async multiRevoke(requests: MultiRevocationRequest[], overrides?: Overrides): Promise<Transaction<void>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     const multiRevocationRequests = requests.map((r) => ({
       schema: r.schema,
       data: r.data.map((d) => ({
@@ -441,24 +442,17 @@ export class EAS extends Base<EASContract> {
         value: requestedValue,
         ...overrides
       }),
-      this.signer,
+      this.signer!,
       async () => {}
     );
   }
 
   // Multi-revokes multiple attestations via an EIP712 delegation requests
+  @RequireSigner
   public async multiRevokeByDelegation(
     requests: MultiDelegatedRevocationRequest[],
     overrides?: Overrides
   ): Promise<Transaction<void>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     let tx: ContractTransaction;
 
     if (await this.isLegacyContract()) {
@@ -504,108 +498,88 @@ export class EAS extends Base<EASContract> {
       });
     }
 
-    return new Transaction(tx, this.signer, async () => {});
+    return new Transaction(tx, this.signer!, async () => {});
   }
 
   // Attests to a specific schema via an EIP712 delegation request using an external EIP712 proxy
+  @RequireSigner
+  @RequireProxy
   public attestByDelegationProxy(
     request: DelegatedProxyAttestationRequest,
     overrides?: Overrides
   ): Promise<Transaction<string>> {
-    if (!this.proxy) {
-      throw new Error("Proxy wasn't set");
-    }
-
-    return this.proxy.attestByDelegationProxy(request, overrides);
+    return this.proxy!.attestByDelegationProxy(request, overrides);
   }
 
   // Multi-attests to multiple schemas via an EIP712 delegation requests using an external EIP712 proxy
+  @RequireSigner
+  @RequireProxy
   public multiAttestByDelegationProxy(
     requests: MultiDelegatedProxyAttestationRequest[],
     overrides?: Overrides
   ): Promise<Transaction<string[]>> {
-    if (!this.proxy) {
-      throw new Error("Proxy wasn't set");
-    }
-
-    return this.proxy.multiAttestByDelegationProxy(requests, overrides);
+    return this.proxy!.multiAttestByDelegationProxy(requests, overrides);
   }
 
   // Revokes an existing attestation an EIP712 delegation request using an external EIP712 proxy
+  @RequireSigner
+  @RequireProxy
   public revokeByDelegationProxy(
     request: DelegatedProxyRevocationRequest,
     overrides?: Overrides
   ): Promise<Transaction<void>> {
-    if (!this.proxy) {
-      throw new Error("Proxy wasn't set");
-    }
-
-    return this.proxy.revokeByDelegationProxy(request, overrides);
+    return this.proxy!.revokeByDelegationProxy(request, overrides);
   }
 
   // Multi-revokes multiple attestations via an EIP712 delegation requests using an external EIP712 proxy
+  @RequireSigner
+  @RequireProxy
   public multiRevokeByDelegationProxy(
     requests: MultiDelegatedProxyRevocationRequest[],
     overrides?: Overrides
   ): Promise<Transaction<void>> {
-    if (!this.proxy) {
-      throw new Error("Proxy wasn't set");
-    }
-
-    return this.proxy.multiRevokeByDelegationProxy(requests, overrides);
+    return this.proxy!.multiRevokeByDelegationProxy(requests, overrides);
   }
 
   // Timestamps the specified bytes32 data
+  @RequireSigner
   public async timestamp(data: string, overrides?: Overrides): Promise<Transaction<bigint>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.timestamp.populateTransaction(data, overrides ?? {}),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getTimestampFromTimestampReceipt(receipt)[0]
     );
   }
 
   // Timestamps the specified multiple bytes32 data
+  @RequireSigner
   public async multiTimestamp(data: string[], overrides?: Overrides): Promise<Transaction<bigint[]>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.multiTimestamp.populateTransaction(data, overrides ?? {}),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getTimestampFromTimestampReceipt(receipt)
     );
   }
 
   // Revokes the specified offchain attestation UID
+  @RequireSigner
   public async revokeOffchain(uid: string, overrides?: Overrides): Promise<Transaction<bigint>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.revokeOffchain.populateTransaction(uid, overrides ?? {}),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getTimestampFromOffchainRevocationReceipt(receipt)[0]
     );
   }
 
   // Revokes the specified multiple offchain attestation UIDs
+  @RequireSigner
   public async multiRevokeOffchain(uids: string[], overrides?: Overrides): Promise<Transaction<bigint[]>> {
-    if (!this.signer) {
-      throw new Error('Invalid signer');
-    }
-
     return new Transaction(
       await this.contract.multiRevokeOffchain.populateTransaction(uids, overrides ?? {}),
-      this.signer,
+      this.signer!,
       // eslint-disable-next-line require-await
       async (receipt: TransactionReceipt) => getTimestampFromOffchainRevocationReceipt(receipt)
     );
@@ -631,13 +605,33 @@ export class EAS extends Base<EASContract> {
     return this.contract.getRevokeTypeHash();
   }
 
+  // Return attestation UID
+  public static getAttestationUID = (
+    schema: string,
+    recipient: string,
+    attester: string,
+    time: bigint,
+    expirationTime: bigint,
+    revocable: boolean,
+    refUID: string,
+    data: string,
+    bump: number
+  ) =>
+    solidityPackedKeccak256(
+      ['bytes', 'address', 'address', 'uint64', 'uint64', 'bool', 'bytes32', 'bytes', 'uint32'],
+      [hexlify(toUtf8Bytes(schema)), recipient, attester, time, expirationTime, revocable, refUID, data, bump]
+    );
+
   // Sets the delegated attestations helper
   private async setDelegated(): Promise<Delegated> {
-    this.delegated = new Delegated({
-      address: await this.contract.getAddress(),
-      domainSeparator: await this.getDomainSeparator(),
-      chainId: await this.getChainId()
-    });
+    this.delegated = new Delegated(
+      {
+        address: await this.contract.getAddress(),
+        domainSeparator: await this.getDomainSeparator(),
+        chainId: await this.getChainId()
+      },
+      this
+    );
 
     return this.delegated;
   }
