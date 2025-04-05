@@ -1,0 +1,41 @@
+# Ignore sensitive and security-related files
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Secret configuration files
+secrets.yml
+config/secrets.yml
+config/database.yml
+
+# Log files
+*.log
+
+# SSH keys
+.ssh/id_rsa
+.ssh/id_rsa.pub
+
+# API keys
+api_keys.json
+api_keys.yml
+config/api_keys.yml
+
+# Dependency files with potential vulnerabilities
+node_modules/
+vendor/
+package-lock.json
+yarn.lock
+
+# Ignore specific directories that may contain sensitive data
+/tmp
+/cache
+/storage
+/logs
