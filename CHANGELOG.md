@@ -2,7 +2,8 @@
 
 ## 2.7.0
 
-- Move getUID, getSchemaUID, and getOffchainUID to EAS, SchemaRegistry, and Offchain respectively
+- Refactored the EAS class to improve modularity and traceability by moving key methods (`getUID`, `getSchemaUID`, and `getOffchainUID`) to their respective classes: `EAS`, `SchemaRegistry`, and `Offchain`. This change enhances the separation of concerns and makes the SDK easier to maintain and extend.
+- Updated configuration handling to improve traceability and debugging, ensuring that configuration changes are logged and easier to track during runtime.
 
 ## 2.6.1
 
