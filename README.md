@@ -6,12 +6,7 @@
 
 EAS SDK is a software development kit designed to simplify and accelerate the integration of [describe the purpose of your SDK, e.g., a specific service or functionality]. This SDK is built with scalability, ease of use, and performance in mind, making it an ideal choice for developers looking to [specific benefits or use cases].
 
-## Features
 
-- **Feature 1:** Brief description of feature 1.
-- **Feature 2:** Brief description of feature 2.
-- **Feature 3:** Brief description of feature 3.
-- **And more...**
 
 ## Installation
 
